@@ -32,6 +32,29 @@ public class ResumeJobDto
     public string resume { get; set; }
 }
 
+public class PredictSimilarityInput
+{
+    [JsonPropertyName("resume")]
+    public string Resume { get; set; }
+    [JsonPropertyName("description")]
+    public string Description { get; set; }
+}
+
+public class PredictHardSkillInput
+{
+    public string Description { get; set; }
+}
+
+public class PredictSoftSkillInput
+{
+    public string Description { get; set; }
+}
+
+public class PredictSimilarityDto
+{
+    public double Score { get; set; }
+}
+
 [ApiController]
 [Route("[controller]")]
 public class JobController : ControllerBase
@@ -40,6 +63,7 @@ public class JobController : ControllerBase
     private IMemoryCache _memoryCache;
     private readonly IHttpClientFactory _httpClientFactory;
     public const string GPTURL = "http://localhost:11434/api/generate";
+    public const string PredictUrl = "https://6c6b-172-83-13-4.ngrok-free.app/predict";
     
     public JobController(WebApiClient webApiClient, IMemoryCache memoryCache, IHttpClientFactory httpClientFactory)
     {
@@ -50,14 +74,23 @@ public class JobController : ControllerBase
 
     [HttpPost]
     [Route("predict-similarity")]
-    public async Task<string> PredictSimilarity(string resume, string description)
+    public async Task<string> PredictSimilarity(PredictSimilarityInput input)
     {
-        return "73.50";
+        var result = await WebApiClient.PostAsync<PredictSimilarityInput, JsonElement>(
+            new Uri(PredictUrl),
+            new PredictSimilarityInput()
+            {
+                Resume = input.Resume,
+                Description = input.Description
+            });
+
+        var res = JsonSerializer.Deserialize<PredictSimilarityDto>(result.Result);
+        return res.Score.ToString();
     }
 
     [HttpPost]
     [Route("predict-hard-skills")]
-    public async Task<List<string>> PredictHardSkills(string description)
+    public async Task<List<string>> PredictHardSkills(PredictHardSkillInput input)
     {
         return new List<string>()
         {
@@ -69,11 +102,11 @@ public class JobController : ControllerBase
 
     [HttpPost]
     [Route("predict-soft-skills")]
-    public async Task<List<string>> PredictSoftSkills(string description)
+    public async Task<List<string>> PredictSoftSkills(PredictSoftSkillInput input)
     {
         return new List<string>()
         {
-            "problem-solving",
+            "problem-solving", "communication"
         };
     }
 
@@ -686,7 +719,7 @@ output only the json object
 
     [HttpPost]
     [Route("get-resume-summary")]
-    public async Task<string> GetResumeSummary(OllamaGetResumeSummaryInput input)
+    public async Task<string> GetResumeSummary(string resume)
     {
         var systemMd = @"
 # IDENTITY and PURPOSE
@@ -697,7 +730,7 @@ Take a deep breath and think step by step about how to best accomplish this goal
 
 # STEPS
 
-- Included in the input should be employment history and user skills, which are telling the AI what to do to generate the output. 
+- Included in the input should be employment history and user skills in a resume, which are telling the AI what to do to generate the output no more than 80 words. 
 
 - Think deeply and read through the employment history and user skills and what they're trying to describe.
 
@@ -705,15 +738,13 @@ Take a deep breath and think step by step about how to best accomplish this goal
 
 - Deeply analyze the employment history and user skills and provide the 3 different variation of the summary from first person point of view.
 
-## EMPLOYMENT HISTORY
-{{employmentHistory}}
+## RESUME
+{{resume}}
 
-## SKILLS
-{{userSkills}}
 
 # OUTPUT
 
-Output the 3 version of summary in a json object with parameter name 'result' as an array containing the 3 summary
+Output the 3 version of summary in a json object with parameter name 'result' each less than 100 words
 
 output only the json object
 
@@ -725,8 +756,7 @@ output only the json object
 
 ";
         
-        systemMd = systemMd.Replace("{{employmentHistory}}", input.EmploymentHistory);
-        systemMd = systemMd.Replace("{{userSkills}}", input.UserSkills);
+        systemMd = systemMd.Replace("{{resume}}", resume);
         var result = await WebApiClient.PostAsync<OllamaGenerateInput, OllamaGenerateOutput>(
             new Uri(GPTURL),
             new OllamaGenerateInput()
