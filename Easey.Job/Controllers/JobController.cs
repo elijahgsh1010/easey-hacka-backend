@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -42,17 +43,41 @@ public class PredictSimilarityInput
 
 public class PredictHardSkillInput
 {
-    public string Description { get; set; }
+    [JsonPropertyName("message")]
+    public string message { get; set; }
 }
 
 public class PredictSoftSkillInput
 {
-    public string Description { get; set; }
+    [JsonPropertyName("message")]
+    public string message { get; set; }
 }
 
 public class PredictSimilarityDto
 {
     public double Score { get; set; }
+}
+
+public class PredictHardSkillDto
+{
+    public List<string> Skills { get; set; }
+}
+
+public class PredictSimilarJobInput
+{
+    public string Resume { get; set; }
+}
+
+public class PredictSimilarJobDto
+{
+    public List<JobRecommendation> Recommendations { get; set; } = new List<JobRecommendation>();
+}
+
+public class JobRecommendation
+{
+    public string Title { get; set; }
+    public string Description { get; set; }
+    public string Company { get; set; }
 }
 
 [ApiController]
@@ -63,7 +88,11 @@ public class JobController : ControllerBase
     private IMemoryCache _memoryCache;
     private readonly IHttpClientFactory _httpClientFactory;
     public const string GPTURL = "http://localhost:11434/api/generate";
-    public const string PredictUrl = "https://6c6b-172-83-13-4.ngrok-free.app/predict";
+    public const string BaseUrl = "https://6ad0-172-83-13-4.ngrok-free.app";
+    public const string PredictUrl = BaseUrl + "/predict";
+    public const string PredictHardSkillUrl = BaseUrl + "/predict-hard-skills";
+    public const string PredictSoftSkillUrl = BaseUrl + "/predict-soft-skills";
+    public const string PredictSimilarJobs = BaseUrl + "predict-similar";
     
     public JobController(WebApiClient webApiClient, IMemoryCache memoryCache, IHttpClientFactory httpClientFactory)
     {
@@ -92,6 +121,10 @@ public class JobController : ControllerBase
     [Route("predict-hard-skills")]
     public async Task<List<string>> PredictHardSkills(PredictHardSkillInput input)
     {
+        var result = await WebApiClient.PostAsync<PredictHardSkillInput, JsonElement>(new Uri(PredictHardSkillUrl), input);
+
+        var res = JsonSerializer.Deserialize<PredictHardSkillDto>(result.Result);
+        return res.Skills;
         return new List<string>()
         {
             "c#",
@@ -104,10 +137,21 @@ public class JobController : ControllerBase
     [Route("predict-soft-skills")]
     public async Task<List<string>> PredictSoftSkills(PredictSoftSkillInput input)
     {
+        var result = await WebApiClient.PostAsync<PredictSoftSkillInput, JsonElement>(new Uri(PredictSoftSkillUrl), input);
+
+        var res = JsonSerializer.Deserialize<PredictHardSkillDto>(result.Result);
+        return res.Skills;
         return new List<string>()
         {
             "problem-solving", "communication"
         };
+    }
+
+    [HttpPost]
+    [Route("get-similar-jobs")]
+    public async Task GetSimilarJobs(PredictSimilarJobInput input)
+    {
+        var result = await WebApiClient.PostAsync<PredictSimilarJobInput, JsonElement>(new Uri(PredictSimilarJobs), input);
     }
 
     [HttpPost]
@@ -744,15 +788,12 @@ Take a deep breath and think step by step about how to best accomplish this goal
 
 # OUTPUT
 
-Output the 3 version of summary in a json object with parameter name 'result' each less than 100 words
+Output the summary as a string less than 100 words
 
-output only the json object
+output only the summary as a single string
 
 ## EXAMPLE
-{ 'result': [
-'summary 1...', 'summary 2...', 'summary 3...'
-]}
-
+'summary....'
 
 ";
         
